@@ -30,5 +30,13 @@
         "grepKey": "空室はございませんでした",
         "grepKeyExcluded": "1DK",
         "homePage": "https://www.to-kousya.or.jp/chintai/reco/kh_taishido.html"
+    },
+    {
+        "type": "jkk",
+        "houseName": "JKK・町田市・町田木曽",
+        "encodedHouseName": "30DE30C130C030AD30BD",
+        "grepKey": "空室はございませんでした",
+        "grepKeyExcluded": "2DK",
+        "homePage": "https://www.to-kousya.or.jp/chintai/reco/machidakiso.html"
     }
 ]
