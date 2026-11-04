@@ -5,10 +5,8 @@ name: Check houses(High).
 # Controls when the workflow will run
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "*/5 * * * *" 
-  # Allows you to run this workflow manually from the Actions tab
-  
+  # schedule:
+  #   - cron: "*/5 * * * *" 
 
 permissions:
   issues: write  # This line ensures the workflow has permission to create issues
@@ -19,8 +17,6 @@ jobs:
   check-time-range:
     runs-on: ubuntu-latest
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      # - uses: actions/checkout@v3
       - name: Check time range
         run: |
           # Get the current hour in UTC
@@ -28,11 +24,10 @@ jobs:
 
           echo "HOUR:${HOUR}"
           
-          # Check if outside 8 AM to 10 PM JST range
-          # UTC 22 PM to 13 PM(14,15)
+          # Check if outside 07:00 to 18:00 JST range (UTC 22시 ~ 09시)
           if [ $HOUR -lt 22 ] && [ $HOUR -ge 9 ]; then
             echo "Current time is outside the schedule range. Exiting..."
-            exit 1
+            exit 0
           fi
           
   call-callee:
@@ -40,24 +35,31 @@ jobs:
     needs: check-time-range
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Trigger Callee Workflow for Each JSON Item
+      - name: Check Vacancy and Create Issue
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           jq -c '.[]' .github/input_parameter_high_priority.json | while read i; do
-            TYPE=$(echo $i | jq -r '.type')
-            ENCODED_HOUSE_NAME=$(echo $i | jq -r '.encodedHouseName')
-            HOUSE_NAME=$(echo $i | jq -r '.houseName')
-            GREP_KEY=$(echo $i | jq -r '.grepKey')
-            HOME_PAGE=$(echo $i | jq -r '.homePage')
+            NAME=$(echo $i | jq -r '.houseName')
+            CODE=$(echo $i | jq -r '.encodedHouseName')
+            KEY=$(echo $i | jq -r '.grepKey')
+            URL=$(echo $i | jq -r '.homePage')
+            EXCL=$(echo $i | jq -r '.grepKeyExcluded // empty')
 
-            # Use GitHub API to trigger the workflow_dispatch event
-            curl \
-              -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/${{ github.repository }}/actions/workflows/callee_single_building.yml/dispatches \
-              -d '{"ref":"main", "inputs": {"type":"'"$TYPE"'", "houseName":"'"$HOUSE_NAME"'", "encodedHouseName":"'"$ENCODED_HOUSE_NAME"'", "grepKey":"'"$GREP_KEY"'", "homePage":"'"$HOME_PAGE"'"}}'
+            # 1. JKK 사이트 조회
+            RES=$(curl -s -L "https://jhomes.to-kousya.or.jp/search/jkknet/service/akiyaJyokenDirect" \
+              -d "redirect=true&sen_flg=1&jutaku_name=$CODE")
+            RES_UTF8=$(echo "$RES" | iconv -f SHIFT_JIS -t UTF-8 2>/dev/null || echo "$RES")
+
+            # 2. 공실 확인 시 바로 Issue 생성
+            if ! echo "$RES_UTF8" | grep -q "$KEY"; then
+              echo "공실 발견: $NAME"
+              gh issue create \
+                --title "🏠 [공실 발생] $NAME ($EXCL)" \
+                --body "매물 링크: $URL"
+            else
+              echo "$NAME [$EXCL] 빈집 없음"
+            fi
           done
